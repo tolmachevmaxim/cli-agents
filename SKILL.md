@@ -18,6 +18,18 @@ scripts/delegate.py --agent codex --mode read-only --cwd /repo \
   --prompt "Review auth.py for security issues; list by severity."
 ```
 
+## Prerequisites
+
+Each worker is a separate CLI that must be on `PATH`. Install only the ones you
+delegate to — a missing binary is reported per-agent and skipped, never fatal.
+
+- **Codex** (`codex`): `npm i -g @openai/codex` — see https://developers.openai.com/codex
+- **Claude Code** (`claude`): https://code.claude.com/docs (usually already present)
+- **Antigravity** (`agy`): `curl -fsSL https://antigravity.google/cli/install.sh | bash`
+
+Auth is per-CLI and handled once by the user (sign-in or env key); this skill
+never sets up credentials. `scripts/delegate.py` itself only needs Python 3.10+.
+
 ## When to use which agent
 
 - **Codex** — code generation, refactors, repo-aware implementation; strong default worker.
