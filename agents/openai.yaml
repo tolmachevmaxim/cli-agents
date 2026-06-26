@@ -1,0 +1,6 @@
+interface:
+  display_name: "CLI Agents"
+  short_description: "Delegate bounded tasks to Codex, Claude Code, or Antigravity (agy)"
+  default_prompt: "Use $cli-agents to delegate this task to another CLI agent safely."
+policy:
+  allow_implicit_invocation: true
