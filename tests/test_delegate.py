@@ -31,7 +31,24 @@ class DelegateCommandTest(unittest.TestCase):
         return MODULE.build_cmd(agent, "PROMPT", **self.args(mode, **overrides))[0]
 
     def test_all_includes_aider(self):
-        self.assertEqual(("codex", "claude", "antigravity", "aider"), MODULE.AGENTS)
+        self.assertEqual(("codex", "claude", "gemini", "antigravity", "aider"), MODULE.AGENTS)
+
+    def test_gemini_read_only_uses_plan_and_sandbox(self):
+        command = self.build("gemini")
+        self.assertIn("gemini", command)
+        self.assertIn("-p", command)
+        self.assertIn("--approval-mode", command)
+        self.assertIn("plan", command)
+        self.assertIn("--sandbox", command)
+        self.assertNotIn("--yolo", command)
+
+    def test_gemini_edit_uses_auto_edit_without_yolo(self):
+        command = self.build("gemini", mode="edit", add_dirs=["/extra/context"])
+        self.assertIn("--approval-mode", command)
+        self.assertIn("auto_edit", command)
+        self.assertIn("--include-directories", command)
+        self.assertIn("/extra/context", command)
+        self.assertNotIn("--yolo", command)
 
     def test_aider_read_only_has_no_write_side_effects(self):
         command = self.build("aider")

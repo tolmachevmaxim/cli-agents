@@ -2,45 +2,51 @@
 
 ## Install and verify
 
+Use the isolated official installation:
+
 ```bash
 uv tool install --force --python python3.12 --with pip aider-chat@latest
 aider --version
 ```
 
-Credentials remain user-managed. The wrapper never asks for, prints, or passes
-API keys in prompts.
+Do not configure API keys for a user. Aider uses the user's already configured
+provider credentials when they choose a model.
 
-## Default routing
+## Default: direct Z.ai GLM-5.2 High
 
-With no explicit `--model`, the wrapper uses direct Z.ai GLM-5.2 High:
+The wrapper defaults Aider to direct Z.ai, not OpenRouter:
 
 - model: `openai/glm-5.2`;
 - Coding Plan endpoint: `https://api.z.ai/api/coding/paas/v4`;
-- reasoning: `high`;
-- bundled model settings and 1M-context metadata.
+- reasoning: `high` (`GLM-5.2 High` is not a model ID);
+- model settings and 1M-context metadata bundled beside this reference.
 
-The target repository must provide its own uncommitted `.env` with
-`OPENAI_API_KEY=<Z.ai API Key>`. Passing `--model` opts out of this default and
-lets Aider use the selected provider's configuration.
+The target repository must provide its own uncommitted `.env`:
+
+```dotenv
+OPENAI_API_KEY=<Z.ai API Key>
+```
+
+The wrapper supplies the endpoint and model flags. Never ask for, print, pass
+in prompts, or commit the key. Passing `--model` explicitly opts out of the
+Z.ai default so a user can intentionally choose another provider.
 
 ## Wrapper behavior
 
 `scripts/delegate.py --agent aider` launches Aider in single-message mode.
 
-- Both modes use `--no-auto-commits --no-dirty-commits`.
-- Read-only work uses `--dry-run`, `--no-git`, `--no-gitignore`, and redirects
-  Aider's input/chat history to `/dev/null`; this avoids skill-file changes,
-  Git initialization, `.gitignore` edits, and history artifacts in the target.
-- Edit work requires one or more explicit `--aider-file` values and uses
-  `--yes-always`; inspect `git diff` yourself afterwards.
-- Use `--aider-read /absolute/path/to/SKILL.md` to attach one relevant skill as
-  read-only context. Never load a whole personal skill directory.
+- Read-only work: `--dry-run --no-git --no-gitignore --yes-always` prevents
+  skill-file writes and avoids Git/history artifacts in the target repository.
+- Edit work: require one or more `--aider-file` values and disable Aider's
+  automatic Git commits with `--no-auto-commits --no-dirty-commits`.
+- Use `--aider-read /absolute/path/to/SKILL.md` for one relevant personal skill
+  as read-only context. Never load the global skill set wholesale.
 
 Examples:
 
 ```bash
 scripts/delegate.py --agent aider --mode read-only --cwd /repo \
-  --aider-read /path/to/relevant/SKILL.md \
+  --aider-read /abs/path/to/relevant/SKILL.md \
   --prompt "Review the browser automation against this skill."
 
 scripts/delegate.py --agent aider --mode edit --cwd /repo \
@@ -49,11 +55,14 @@ scripts/delegate.py --agent aider --mode edit --cwd /repo \
 
 ## Skills and conventions
 
-Aider has no native Agent-Skills discovery directory. Attach only a selected
-`SKILL.md` through `--aider-read`. Keep personal skills in their canonical
-roots.
+Aider has no Agent-Skills discovery directory. Its supported instruction
+mechanisms are read-only files (`--read` or `read:` in `.aider.conf.yml`) and
+small conventions files. Keep personal skills in their existing canonical
+roots; attach only a selected `SKILL.md` to an Aider task with `--aider-read`.
 
 Official docs: [installation](https://aider.chat/docs/install.html),
 [scripting](https://aider.chat/docs/scripting.html),
 [conventions](https://aider.chat/docs/usage/conventions.html), and
-[configuration](https://aider.chat/docs/config/aider_conf.html).
+[configuration](https://aider.chat/docs/config/aider_conf.html). Z.ai:
+[Coding Plan integration](https://docs.z.ai/devpack/tool/others) and
+[GLM-5.2 parameters](https://docs.z.ai/guides/overview/concept-param).

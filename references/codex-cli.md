@@ -1,6 +1,7 @@
 # Codex CLI Reference (worker)
 
-Observed locally: `codex-cli 0.142.1`. Use `codex exec` for non-interactive runs.
+Use `codex exec` for non-interactive runs. Verify the installed version with
+`codex --version` because the CLI changes independently of the skill package.
 
 ## Non-interactive execution
 

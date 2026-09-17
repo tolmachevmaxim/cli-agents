@@ -1,13 +1,14 @@
 # Antigravity CLI Reference (worker)
 
-Google's terminal coding agent. Binary: `agy`. Observed locally: `agy 1.0.12`.
+Google's terminal coding agent. Binary: `agy`. Verify the installed version with
+`agy --version` because the CLI changes independently of Gemini CLI.
 Auth comes from the signed-in Antigravity account (no API key needed locally if
 you're logged into the Antigravity app/IDE; for unattended CI set
 `ANTIGRAVITY_API_KEY` or `GEMINI_API_KEY`).
 
-> Replaces the legacy `gemini` CLI, whose free "Code Assist for individuals"
-> OAuth tier was discontinued (`IneligibleTierError`). Antigravity is the
-> product Google migrated that to.
+Gemini CLI (`gemini`) and Antigravity CLI (`agy`) are separate Google products.
+Use [the Gemini CLI reference](gemini-cli.md) for `gemini -p`; this file covers
+only `agy`.
 
 ## Non-interactive execution
 
@@ -37,9 +38,9 @@ Subcommands: `agy models` (list models), `agy update`, `agy plugin …`, `agy in
 
 ## Safety guidance
 
-- read-only delegation → add `--sandbox` (terminal restrictions); do not skip permissions.
-- edit delegation → plain `agy -p` (no `--sandbox`); inspect `git diff` afterwards.
-- NEVER pass `--dangerously-skip-permissions` from delegation — it auto-approves
+- read-only delegation: add `--sandbox` (terminal restrictions); do not skip permissions.
+- edit delegation: plain `agy -p` (no `--sandbox`); inspect `git diff` afterwards.
+- Never pass `--dangerously-skip-permissions` from delegation. It auto-approves
   every tool call. For bounded edits that need many approvals, prefer codex or
   claude as the edit worker; use antigravity mainly for read-only / second opinions.
 - The worker runs in the launcher's `cwd`; scope context with `--add-dir`.

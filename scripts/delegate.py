@@ -2,21 +2,21 @@
 """Delegate a bounded task to one or more external CLI agents.
 
 Universal worker launcher: whichever agent is orchestrating (Claude Code,
-Codex, or Antigravity), this runs the OTHERS as bounded sub-workers with safe
+Codex, Gemini CLI, or Antigravity), this runs the OTHERS as bounded sub-workers with safe
 defaults, captures only their final message, and (optionally) runs several in
 parallel for second-opinion / comparison.
 
 It NEVER enables destructive auto-approval (no codex danger-full-access, no
 `--dangerously-skip-permissions`). Two scoped modes exist:
   read-only : analysis / review / planning
-              (codex -s read-only ; claude plan ; antigravity --sandbox ; aider --dry-run)
+              (codex -s read-only ; claude plan ; gemini --sandbox --approval-mode plan ; antigravity --sandbox ; aider --dry-run)
   edit      : bounded code edits
-              (codex -s workspace-write ; claude acceptEdits ; antigravity print ; aider explicit files)
+              (codex -s workspace-write ; claude acceptEdits ; gemini auto_edit ; antigravity print ; aider explicit files)
 
 The orchestrator is still responsible for: inspecting `git diff` afterwards,
 running verification itself, and never delegating push/deploy/delete.
 
-Worker → binary:  codex→codex · claude→claude · antigravity→agy · aider→aider
+Worker → binary:  codex→codex · claude→claude · gemini→gemini · antigravity→agy · aider→aider
 
 Examples
 --------
@@ -48,10 +48,11 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-AGENTS = ('codex', 'claude', 'antigravity', 'aider')
+AGENTS = ('codex', 'claude', 'gemini', 'antigravity', 'aider')
 BINARIES = {
     'codex': 'codex',
     'claude': 'claude',
+    'gemini': 'gemini',
     'antigravity': 'agy',
     'aider': 'aider',
 }
@@ -98,6 +99,21 @@ def build_cmd(agent: str, prompt: str, *, mode: str, cwd: str | None,
         for d in add_dirs:
             argv += ['--add-dir', d]
         return argv, prompt, False  # prompt via stdin, answer on stdout
+
+    if agent == 'gemini':
+        # Gemini CLI uses -p for headless execution. Plan mode keeps the
+        # read-only worker from approving mutating tools; sandbox adds a
+        # second boundary for shell and filesystem access.
+        approval_mode = 'plan' if mode == 'read-only' else 'auto_edit'
+        argv = ['gemini', '-p', prompt, '--output-format', 'text',
+                '--approval-mode', approval_mode]
+        if mode == 'read-only':
+            argv.append('--sandbox')
+        if model:
+            argv += ['--model', model]
+        for d in add_dirs:
+            argv += ['--include-directories', d]
+        return argv, None, False  # prompt on argv, answer on stdout
 
     if agent == 'antigravity':
         # agy -p runs a single prompt non-interactively. --sandbox restricts the
@@ -227,7 +243,7 @@ def main():
     ap.add_argument('--agent', action='append', choices=AGENTS,
                     help='Target agent (repeatable). Omit with --all.')
     ap.add_argument('--all', action='store_true',
-                    help='Delegate to every available agent (codex, claude, antigravity)')
+                    help='Delegate to every available agent (codex, claude, gemini, antigravity, aider)')
     ap.add_argument('--mode', choices=('read-only', 'edit'), default='read-only',
                     help='read-only (default) = analysis/review; edit = bounded code edits')
     ap.add_argument('--prompt', help='Prompt text')
