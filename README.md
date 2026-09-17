@@ -1,8 +1,8 @@
 # cli-agents
 
 A universal **Agent Skill** that lets one command-line AI agent delegate bounded
-sub-tasks to the *others* — **Codex CLI**, **Claude Code CLI**, and **Antigravity
-CLI (`agy`)** — from whichever agent is orchestrating.
+sub-tasks to the *others* — **Codex CLI**, **Claude Code CLI**, **Antigravity
+CLI (`agy`)**, and **Aider** — from whichever agent is orchestrating.
 
 Whoever is driving stays the orchestrator (final judgment, verification, anything
 with side effects); the workers do scoped analysis, review, or bounded edits, with
@@ -14,14 +14,16 @@ Built to the [Agent Skills open standard](https://agentskills.io) — one portab
 
 ## What it does
 
-- **One wrapper, three workers** — `scripts/delegate.py` builds the right command
-  per agent (`codex exec`, `claude --print`, `agy -p`), applies safe defaults, and
+- **One wrapper, four workers** — `scripts/delegate.py` builds the right command
+  per agent (`codex exec`, `claude --print`, `agy -p`, `aider --message`), applies safe defaults, and
   returns only the final message.
 - **Two scoped modes** — `read-only` (analysis/review/planning) and `edit` (bounded
   code edits). Never enables destructive auto-approval (no codex
   `danger-full-access`, no `--dangerously-skip-permissions`).
 - **Parallel / second opinion** — `--agent codex --agent antigravity` (or `--all`)
   runs workers concurrently; compare or synthesize locally.
+- **Aider guardrails** — read-only runs use dry-run plus no-Git/history side
+  effects; edit runs require explicit `--aider-file` paths and disable auto-commit.
 - **Progressive disclosure** — lean `SKILL.md`; CLI details live in `references/`,
   loaded on demand.
 
@@ -61,8 +63,8 @@ ln -s ~/.claude/skills/cli-agents ~/.agents/skills/cli-agents
 Requirements: Python 3.10+, and whichever worker CLIs you want to delegate to on
 `PATH` — [`codex`](https://developers.openai.com/codex),
 [`claude`](https://code.claude.com/docs), and/or
-[`agy`](https://antigravity.google) (Antigravity CLI). Missing binaries are
-reported per-agent and skipped, not fatal.
+[`agy`](https://antigravity.google), and/or [`aider`](https://aider.chat/).
+Missing binaries are reported per-agent and skipped, not fatal.
 
 ## How it works
 

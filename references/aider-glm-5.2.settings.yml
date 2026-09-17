@@ -1,0 +1,7 @@
+- name: openai/glm-5.2
+  edit_format: diff
+  weak_model_name: openai/glm-5.2
+  use_repo_map: true
+  use_temperature: false
+  accepts_settings:
+    - reasoning_effort

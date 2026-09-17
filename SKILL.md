@@ -1,12 +1,12 @@
 ---
 name: cli-agents
-description: Delegate bounded sub-tasks to other command-line AI agents — Codex CLI, Claude Code CLI, and Antigravity CLI (agy) — from whichever agent is orchestrating. Use whenever the user asks to use Codex, use Claude Code, use Antigravity/agy, run an external/CLI agent, get a second opinion, compare agent outputs, parallelize work, or save tokens/quota by offloading analysis or bounded edits. Make sure to use this even if the user just names another agent ("ask Codex to…", "let Antigravity review…").
+description: Delegate bounded sub-tasks to other command-line AI agents — Codex CLI, Claude Code CLI, Antigravity CLI (agy), and Aider (aider-chat) — from whichever agent is orchestrating. Use whenever the user asks to use Codex, use Claude Code, use Antigravity/agy, use Aider, run an external/CLI agent, get a second opinion, compare agent outputs, parallelize work, or save tokens/quota by offloading analysis or bounded edits. Make sure to use this even if the user just names another agent ("ask Codex to…", "let Aider review…").
 ---
 
 # CLI Agents
 
 You are the orchestrator. Delegate bounded, well-scoped work to the OTHER
-command-line agents (Codex, Claude Code, Antigravity/`agy`), keep final judgment
+command-line agents (Codex, Claude Code, Antigravity/`agy`, Aider), keep final judgment
 yourself, and never hand off destructive or external-side-effect actions.
 
 Run delegations through the wrapper — it builds the right command per agent,
@@ -36,6 +36,10 @@ never sets up credentials. `scripts/delegate.py` itself only needs Python 3.10+.
 - **Claude Code** — codebase edits, code review, repository reasoning, tool-heavy tasks.
 - **Antigravity** (`agy`) — Google's agent: long-context summarization, independent
   critique, second opinions, Google-model perspective. Best for read-only work.
+- **Aider** (`aider`) — focused local code review or edits using its repo-map
+  workflow. The wrapper uses direct Z.ai GLM-5.2 High by default; pass
+  `--model` for an intentional provider override. Edit mode requires explicit
+  files and disables Aider auto-commits.
 - **Two+ in parallel** — comparison / second opinion: `--agent codex --agent antigravity` (or `--all`).
 - Do the critical-path step yourself if waiting on a worker would block progress.
 
@@ -52,6 +56,16 @@ git -C /repo diff
 
 # Machine-readable output for scripting
 scripts/delegate.py --all --json --prompt "Summarize the architecture in 5 bullets." --cwd /repo
+
+# Aider read-only review: dry-run and explicit skill context
+scripts/delegate.py --agent aider --mode read-only --cwd /repo \
+  --aider-read /path/to/relevant/SKILL.md \
+  --prompt "Review src/browser.py against the attached skill; list concrete gaps."
+
+# Aider bounded edit: specify each editable file; inspect the diff
+scripts/delegate.py --agent aider --mode edit --cwd /repo \
+  --aider-file src/browser.py --prompt "Implement the approved validation change."
+git -C /repo diff
 ```
 
 Run `scripts/delegate.py -h` for all flags (`--model`, `--add-dir`, `--timeout`, `--json`).
@@ -61,7 +75,11 @@ Run `scripts/delegate.py -h` for all flags (`--model`, `--add-dir`, `--timeout`,
 - `--mode read-only` (default): analysis / review / planning. Maps to codex
   `-s read-only`, claude `--permission-mode plan`, antigravity `--sandbox`.
 - `--mode edit`: bounded code edits. Maps to codex `-s workspace-write`, claude
-  `acceptEdits`, antigravity plain print (prefer codex/claude for heavy edits).
+  `acceptEdits`, antigravity plain print, and Aider explicit `--aider-file` edits.
+- Aider read-only mode uses `--dry-run`, `--no-git`, `--no-gitignore`, and
+  redirects its history files to `/dev/null`; this prevents worker-created
+  repository artifacts as well as skill-file edits. Both Aider modes use
+  `--no-auto-commits --no-dirty-commits` and attach only selected files.
 - The wrapper never enables destructive modes (no codex danger-full-access, no
   `--dangerously-skip-permissions`).
 - Never delegate deploy / push / delete / send / post — do those yourself with
@@ -89,4 +107,6 @@ refactors), **Output** (concise result + changed-files list if editing),
 - `references/codex-cli.md` — `codex exec` flags, sandbox modes, clean capture.
 - `references/claude-code.md` — `claude --print` flags, permission modes, budget.
 - `references/antigravity-cli.md` — `agy -p` flags, sandbox, auth, models.
+- `references/aider.md` — installation, one-shot mode, safe wrapper flags, and
+  the selected-skill convention.
 - `references/prompt-templates.md` — review / edit / compare / extract templates.

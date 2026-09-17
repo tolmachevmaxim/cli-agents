@@ -9,14 +9,14 @@ parallel for second-opinion / comparison.
 It NEVER enables destructive auto-approval (no codex danger-full-access, no
 `--dangerously-skip-permissions`). Two scoped modes exist:
   read-only : analysis / review / planning
-              (codex -s read-only ; claude plan ; antigravity --sandbox)
+              (codex -s read-only ; claude plan ; antigravity --sandbox ; aider --dry-run)
   edit      : bounded code edits
-              (codex -s workspace-write ; claude acceptEdits ; antigravity print)
+              (codex -s workspace-write ; claude acceptEdits ; antigravity print ; aider explicit files)
 
 The orchestrator is still responsible for: inspecting `git diff` afterwards,
 running verification itself, and never delegating push/deploy/delete.
 
-Worker → binary:  codex→codex · claude→claude · antigravity→agy
+Worker → binary:  codex→codex · claude→claude · antigravity→agy · aider→aider
 
 Examples
 --------
@@ -30,11 +30,17 @@ Examples
 
   # Bounded edit by Claude Code
   delegate.py --agent claude --mode edit --cwd /repo --prompt-file task.md
+
+  # Bounded edit by Aider; files must be explicit and Aider auto-commits stay off
+  delegate.py --agent aider --mode edit --cwd /repo --aider-file src/app.py \
+      --prompt "Add validation and run the focused test."
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -42,13 +48,26 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-AGENTS = ('codex', 'claude', 'antigravity')
-BINARIES = {'codex': 'codex', 'claude': 'claude', 'antigravity': 'agy'}
+AGENTS = ('codex', 'claude', 'antigravity', 'aider')
+BINARIES = {
+    'codex': 'codex',
+    'claude': 'claude',
+    'antigravity': 'agy',
+    'aider': 'aider',
+}
+
+DEFAULT_AIDER_MODEL = 'openai/glm-5.2'
+DEFAULT_AIDER_REASONING_EFFORT = 'high'
+ZAI_CODING_API_BASE = 'https://api.z.ai/api/coding/paas/v4'
+SKILL_ROOT = Path(__file__).resolve().parent.parent
+AIDER_GLM_SETTINGS = SKILL_ROOT / 'references' / 'aider-glm-5.2.settings.yml'
+AIDER_GLM_METADATA = SKILL_ROOT / 'references' / 'aider-glm-5.2.metadata.json'
 
 
 def build_cmd(agent: str, prompt: str, *, mode: str, cwd: str | None,
               model: str | None, add_dirs: list[str], timeout: int,
-              out_file: str | None):
+              out_file: str | None, aider_files: list[str],
+              aider_reads: list[str]):
     """Return (argv, stdin_data, reads_output_file).
 
     stdin_data is piped to the process (None → prompt is already on argv).
@@ -92,6 +111,39 @@ def build_cmd(agent: str, prompt: str, *, mode: str, cwd: str | None,
             argv += ['--add-dir', d]
         return argv, None, False  # prompt on argv, answer on stdout
 
+    if agent == 'aider':
+        # Aider has no native Agent-Skills directory. Selected skill documents
+        # can be supplied explicitly through --aider-read as read-only context.
+        # Disable Git initialization, .gitignore edits, and history files so a
+        # read-only delegation cannot dirty a non-Git working directory.
+        argv = [
+            'aider', '--message', prompt, '--no-stream',
+            '--no-auto-commits', '--no-dirty-commits', '--no-git',
+            '--no-gitignore', '--input-history-file', os.devnull,
+            '--chat-history-file', os.devnull,
+        ]
+        if model:
+            argv += ['--model', model]
+        else:
+            argv += [
+                '--model', DEFAULT_AIDER_MODEL,
+                '--openai-api-base', ZAI_CODING_API_BASE,
+                '--reasoning-effort', DEFAULT_AIDER_REASONING_EFFORT,
+                '--model-settings-file', str(AIDER_GLM_SETTINGS),
+                '--model-metadata-file', str(AIDER_GLM_METADATA),
+            ]
+        for path in aider_reads:
+            argv += ['--read', path]
+        if mode == 'read-only':
+            argv += ['--dry-run', '--yes-always']
+        else:
+            if not aider_files:
+                raise ValueError('Aider edit mode requires at least one --aider-file')
+            for path in aider_files:
+                argv += ['--file', path]
+            argv.append('--yes-always')
+        return argv, None, False
+
     raise ValueError(f'unknown agent {agent!r}')
 
 
@@ -102,14 +154,25 @@ def run_agent(agent: str, prompt: str, args) -> dict:
         rec.update(ok=False, error=f'{binary} binary not found on PATH', skipped=True)
         return rec
 
+    if agent == 'aider':
+        for path in (args.aider_file or []) + (args.aider_read or []):
+            if not os.path.isfile(path):
+                rec.update(ok=False, error=f'Aider context file not found: {path}')
+                return rec
+
     out_file = None
     if agent == 'codex':
         out_file = tempfile.NamedTemporaryFile(
             prefix=f'delegate-{agent}-', suffix='.txt', delete=False).name
 
-    argv, stdin_data, reads_file = build_cmd(
-        agent, prompt, mode=args.mode, cwd=args.cwd, model=args.model,
-        add_dirs=args.add_dir or [], timeout=args.timeout, out_file=out_file)
+    try:
+        argv, stdin_data, reads_file = build_cmd(
+            agent, prompt, mode=args.mode, cwd=args.cwd, model=args.model,
+            add_dirs=args.add_dir or [], timeout=args.timeout, out_file=out_file,
+            aider_files=args.aider_file or [], aider_reads=args.aider_read or [])
+    except ValueError as exc:
+        rec.update(ok=False, error=str(exc))
+        return rec
 
     rec['cmd'] = ' '.join(a if a != prompt else '<prompt>' for a in argv)
     started = time.time()
@@ -173,6 +236,10 @@ def main():
     ap.add_argument('--model', help='Override the worker model (agent-specific alias)')
     ap.add_argument('--add-dir', action='append',
                     help='Extra readable/writable dir (repeatable)')
+    ap.add_argument('--aider-file', action='append',
+                    help='Explicit editable file for Aider (repeatable; required for Aider edit mode)')
+    ap.add_argument('--aider-read', action='append',
+                    help='Read-only context file for Aider, e.g. a selected personal SKILL.md (repeatable)')
     ap.add_argument('--timeout', type=int, default=600,
                     help='Per-agent timeout in seconds (default 600)')
     ap.add_argument('--json', action='store_true',
